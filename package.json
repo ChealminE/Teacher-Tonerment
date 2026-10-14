@@ -1,0 +1,13 @@
+{
+  "name": "soda-co2-simulator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "탄산수 속 CO₂ 용해도 AI 시뮬레이터 (고등학교 화학)",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/"
+  },
+  "devDependencies": {
+    "three": "0.128.0"
+  }
+}
