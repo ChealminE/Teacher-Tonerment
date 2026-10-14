@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="고등학교 수업용 수온과 용존산소 물고기 생존 AI 시뮬레이터: 기체 용해도와 온도, 헨리 법칙, 고지대, 에어펌프, 양식장 집단 폐사">
+<title>수온과 용존산소: 물고기 생존 AI 시뮬레이터</title>
+<!-- INLINE:CSS -->
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <a class="back-link" href="../index.html">← 탄산수 시뮬레이터</a>
+    <span class="brand-icon" aria-hidden="true">🐟</span>
+    <div class="brand-text">
+      <h1>수온과 용존산소: 물고기 생존 AI 시뮬레이터</h1>
+      <p class="inquiry">탐구 질문: 여름철 폭염에 양식장 물고기가 집단 폐사하는 이유는 무엇일까? 수온, 산소, 물고기 수, 에어펌프는 어떻게 연결될까?</p>
+    </div>
+  </div>
+  <div class="top-controls">
+    <div class="seg" role="group" aria-label="시뮬레이션 속도 (실제 1초 = 시뮬레이션 몇 분)">
+      <button type="button" class="seg-btn" data-speed="1" aria-pressed="true">×1</button>
+      <button type="button" class="seg-btn" data-speed="10" aria-pressed="false">×10</button>
+      <button type="button" class="seg-btn" data-speed="60" aria-pressed="false">×60</button>
+    </div>
+    <button type="button" id="btnPause" class="btn" aria-label="일시정지">⏸ 일시정지</button>
+    <button type="button" id="btnReset" class="btn" aria-label="초기화">↺<span class="lbl"> 초기화</span></button>
+    <button type="button" id="btnSettings" class="btn btn-accent" aria-label="AI 설정">⚙<span class="lbl"> AI 설정</span></button>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="viewer" id="viewer" aria-label="물고기 수조 3D 모델">
+    <canvas id="scene" aria-label="수조 속 물고기와 O₂ 분자 3D 장면. 드래그해 회전, 휠이나 두 손가락으로 확대, 물고기를 누르면 상태가 보여요."></canvas>
+    <div class="gl-fallback" id="glFallback" hidden>
+      <p><strong>이 브라우저에서는 3D(WebGL)를 쓸 수 없어요.</strong></p>
+      <p>그래프·상태 카드·AI 명령 등 나머지 기능은 그대로 사용할 수 있어요.<br>하드웨어 가속을 켜거나 최신 Chrome·Edge·Safari로 열어 보세요.</p>
+    </div>
+    <div class="caption" id="caption" role="status" aria-live="polite"></div>
+    <div class="fish-tip" id="fishTip" hidden role="status" aria-live="polite"></div>
+    <div class="view-tools">
+      <button type="button" class="chip-btn" id="btnCamReset">🎥 카메라 초기화</button>
+      <button type="button" class="chip-btn" id="btnCloseUp">🔍 수면 클로즈업</button>
+      <button type="button" class="chip-btn" id="btnN2" aria-pressed="true">🔵 N₂ 보기</button>
+      <button type="button" class="chip-btn" id="btnWater" aria-pressed="false">💧 물 분자 보기</button>
+    </div>
+    <div class="legend3d" aria-hidden="true">
+      <span><i class="dot dot-o"></i>O₂ (O=O)</span>
+      <span><i class="dot dot-n"></i>N₂ (N≡N)</span>
+      <span><i class="dot dot-b"></i>기포</span>
+      <span><i class="dot dot-w"></i>H₂O</span>
+      <span><i class="dot dot-dead"></i>폐사</span>
+      <span class="quality" id="quality"></span>
+    </div>
+    <p class="disclaimer">교육용 단순화 모델이며, 어종 수치는 근사값이에요.</p>
+  </section>
+
+  <aside class="panel">
+    <section class="card status-card" aria-labelledby="statusTitle">
+      <div class="card-head">
+        <h2 id="statusTitle">현재 상태</h2>
+        <span class="badge comfort" id="statusBadge">쾌적</span>
+      </div>
+      <dl class="stats">
+        <div><dt>수온</dt><dd id="vT">–</dd></div>
+        <div><dt>기압 (해발고도)</dt><dd id="vP">–</dd></div>
+        <div><dt>에어펌프</dt><dd id="vPump">–</dd></div>
+        <div><dt>어종</dt><dd id="vSpecies">–</dd></div>
+        <div><dt>물고기 (생존/전체)</dt><dd id="vFish">–</dd></div>
+        <div><dt>생존률</dt><dd id="vSurv">–</dd></div>
+        <div class="em"><dt>포화 DO</dt><dd id="vCsat">–</dd></div>
+        <div class="em"><dt>실제 DO</dt><dd id="vDO">–</dd></div>
+      </dl>
+      <p class="reason" id="vReason"></p>
+      <p class="sim-time">시뮬레이션 시간 <b id="vTime">0.0분</b> · <span id="vSpeed">×1</span> · 수조 100 L</p>
+      <div class="formula" aria-label="현재 계산식">
+        <code id="fHenry" class="strong"></code>
+        <code id="fCsat"></code>
+        <code id="fRate"></code>
+        <code id="fSteady"></code>
+      </div>
+    </section>
+
+    <section class="card scenario-card" aria-labelledby="scnTitle">
+      <h2 id="scnTitle">시나리오</h2>
+      <div class="scenario-grid">
+        <button type="button" class="btn scn" data-scenario="heatwave">🔥 폭염<small>1℃/분씩 32℃까지</small></button>
+        <button type="button" class="btn scn" data-scenario="highland">🏔 고산 호수<small>해발 2000 m</small></button>
+        <button type="button" class="btn scn" data-scenario="overcrowded">🐟 과밀 양식<small>50마리</small></button>
+        <button type="button" class="btn scn" data-scenario="emergencyPump">💨 에어펌프 비상 가동<small>기포로 산소 공급</small></button>
+      </div>
+    </section>
+
+    <section class="card graph-card" aria-labelledby="graphTitle">
+      <h2 id="graphTitle" class="sr-only">그래프</h2>
+      <div class="tabs" role="tablist" aria-label="그래프 종류">
+        <button type="button" role="tab" class="tab" id="tab-curve" aria-selected="true" aria-controls="graphPanel" data-tab="curve">용해도 곡선</button>
+        <button type="button" role="tab" class="tab" id="tab-time" aria-selected="false" aria-controls="graphPanel" data-tab="time">시간 그래프</button>
+        <button type="button" role="tab" class="tab" id="tab-gas" aria-selected="false" aria-controls="graphPanel" data-tab="gas">기체 비교</button>
+      </div>
+      <div id="graphPanel" role="tabpanel">
+        <canvas id="graph" class="graph" aria-label="그래프"></canvas>
+        <div class="gas-extra" id="gasExtra" hidden>
+          <label class="inline-toggle"><input type="checkbox" id="gasLog" checked> 로그 눈금으로 보기 (CO₂와 O₂·N₂의 차이가 커서 기본은 로그 눈금)</label>
+          <p class="connect-title">🔗 연결 질문 (눌러서 물어보기)</p>
+          <button type="button" class="question" data-ask="탄산수는 왜 차갑게 보관할까?">🫧 탄산수는 왜 차갑게 보관할까?</button>
+          <button type="button" class="question" data-ask="잠수부가 빨리 올라오면 혈액 속 N₂는?">🤿 잠수부가 빨리 올라오면 혈액 속 N₂는?</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card controls-card" aria-labelledby="ctrlTitle">
+      <h2 id="ctrlTitle">수동 조작</h2>
+      <div class="slider-row">
+        <label for="sT">수온</label>
+        <input type="range" id="sT" min="0" max="40" step="0.5" value="20">
+        <output id="oT" for="sT">20.0 ℃</output>
+      </div>
+      <div class="slider-row">
+        <label for="sP">기압</label>
+        <input type="range" id="sP" min="500" max="1100" step="1" value="1013.25">
+        <output id="oP" for="sP">1013 hPa</output>
+      </div>
+      <div class="slider-row">
+        <label for="sN">물고기 수</label>
+        <input type="range" id="sN" min="0" max="60" step="1" value="20">
+        <output id="oN" for="sN">20마리</output>
+      </div>
+      <div class="button-row">
+        <button type="button" class="btn" id="btnPump" aria-pressed="false">💨 에어펌프 켜기</button>
+        <div class="seg" role="group" aria-label="어종">
+          <button type="button" class="seg-btn species-btn" data-species="trout" aria-pressed="true">무지개송어</button>
+          <button type="button" class="seg-btn species-btn" data-species="carp" aria-pressed="false">잉어</button>
+        </div>
+      </div>
+      <p class="hint" id="speciesHint"></p>
+      <p class="hint">기압을 바꾸면 해발고도가 함께 계산돼요(해발 2000 m ≈ 795 hPa). 물고기를 넣거나 빼면 폐사한 물고기는 건져 내고 그 수를 새 기준으로 잡아요.</p>
+    </section>
+
+    <section class="card record-card" aria-labelledby="recTitle">
+      <div class="card-head">
+        <h2 id="recTitle">실험 기록</h2>
+        <div class="button-row tight">
+          <button type="button" class="btn small" id="btnRecord">📌 지금 기록</button>
+          <button type="button" class="btn small" id="btnCsv">💾 CSV 저장</button>
+          <button type="button" class="btn small" id="btnCopy">📋 표 복사</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="records">
+          <thead><tr id="recHead"></tr></thead>
+          <tbody id="recBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<footer class="dock" id="dock">
+  <div class="chat-log" id="chatLog" aria-live="polite" aria-label="명령 기록"></div>
+  <div class="chips" id="chips" aria-label="예시 명령"></div>
+  <form class="input-row" id="cmdForm" autocomplete="off">
+    <span class="mode-badge" id="modeBadge" title="현재 명령 해석 방식">🧩 내장 해석기</span>
+    <button type="button" class="icon-btn" id="btnMic" hidden aria-label="음성으로 입력">🎤</button>
+    <input type="text" id="cmdInput" enterkeyhint="send" placeholder="예) 수온 5도 올려줘, 에어펌프 켜고 물고기 열 마리 빼줘" aria-label="AI에게 보낼 명령">
+    <button type="submit" class="btn btn-accent send" id="btnSend"><span class="send-label">보내기</span><span class="spinner" aria-hidden="true"></span></button>
+  </form>
+</footer>
+
+<dialog id="settings" aria-labelledby="setTitle">
+  <form method="dialog" class="settings-form" id="settingsForm">
+    <h2 id="setTitle">⚙ AI 설정</h2>
+    <p class="hint">AI 모드를 켜면 대형 언어 모델(LLM)이 문장을 해석해요. 응답이 8초 안에 오지 않거나 형식이 틀리면 자동으로 내장 해석기가 처리해요.</p>
+    <label class="inline-toggle"><input type="checkbox" id="setEnabled"> AI 모드 사용</label>
+    <label for="setProvider">제공자</label>
+    <select id="setProvider">
+      <option value="anthropic">Anthropic Claude</option>
+      <option value="openai">OpenAI</option>
+      <option value="gemini">Google Gemini</option>
+      <option value="custom">OpenAI 호환 (사용자 지정 URL)</option>
+    </select>
+    <div id="rowBaseUrl" hidden>
+      <label for="setBaseUrl">API 주소 (예: http://localhost:11434/v1)</label>
+      <input type="url" id="setBaseUrl" placeholder="https://example.com/v1" spellcheck="false">
+    </div>
+    <label for="setModel">모델명</label>
+    <input type="text" id="setModel" spellcheck="false">
+    <label for="setKey">API 키</label>
+    <input type="password" id="setKey" autocomplete="off" spellcheck="false" placeholder="키는 이 탭의 메모리에만 보관돼요">
+    <p class="hint">🔒 API 키는 저장되지 않고 페이지를 닫거나 새로 고치면 사라져요. 학생 기기에 키를 입력할 때는 사용량 한도가 있는 키를 쓰세요. Anthropic은 키가 비어 있으면 키 없이 한 번 시도해요(claude.ai 아티팩트 미리보기용).</p>
+    <div class="button-row end">
+      <button type="button" class="btn" id="setClearKey">키 지우기</button>
+      <button type="button" class="btn" id="setCancel">취소</button>
+      <button type="submit" class="btn btn-accent" id="setSave">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- INLINE:THREE -->
+<!-- INLINE:CORE -->
+<!-- INLINE:APP -->
+</body>
+</html>
