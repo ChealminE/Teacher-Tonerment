@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="고등학교 화학 수업용 탄산수 속 CO₂ 용해도 AI 시뮬레이터: 온도·압력과 기체 용해도, 헨리 법칙, 과포화와 기포">
+<title>탄산수 속 CO₂ 용해도 AI 시뮬레이터</title>
+<!-- INLINE:CSS -->
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-icon" aria-hidden="true">🫧</span>
+    <div>
+      <h1>탄산수 속 CO₂ 용해도 AI 시뮬레이터</h1>
+      <p class="inquiry">탐구 질문: 차가운 탄산수와 미지근한 탄산수, 뚜껑을 연 직후와 마신 직후, 탄산(CO₂)은 어디로 가는가?</p>
+    </div>
+  </div>
+  <div class="top-controls">
+    <div class="seg" role="group" aria-label="시뮬레이션 속도">
+      <button type="button" class="seg-btn" data-speed="1" aria-pressed="true">×1</button>
+      <button type="button" class="seg-btn" data-speed="5" aria-pressed="false">×5</button>
+      <button type="button" class="seg-btn" data-speed="20" aria-pressed="false">×20</button>
+    </div>
+    <button type="button" id="btnPause" class="btn" aria-label="일시정지">⏸ 일시정지</button>
+    <button type="button" id="btnReset" class="btn" aria-label="초기화">↺<span class="lbl"> 초기화</span></button>
+    <button type="button" id="btnSettings" class="btn btn-accent" aria-label="AI 설정">⚙<span class="lbl"> AI 설정</span></button>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="viewer" id="viewer" aria-label="탄산수 병 3D 모델">
+    <canvas id="scene" aria-label="탄산수 병 속 CO₂ 분자와 기포 3D 장면. 마우스로 드래그해 회전, 휠로 확대할 수 있어요."></canvas>
+    <div class="gl-fallback" id="glFallback" hidden>
+      <p><strong>이 브라우저에서는 3D(WebGL)를 쓸 수 없어요.</strong></p>
+      <p>그래프·상태 카드·AI 명령 등 나머지 기능은 그대로 사용할 수 있어요.<br>하드웨어 가속을 켜거나 최신 Chrome·Edge·Safari로 열어 보세요.</p>
+    </div>
+    <div class="caption" id="caption" role="status" aria-live="polite"></div>
+    <div class="view-tools">
+      <button type="button" class="chip-btn" id="btnCamReset">🎥 카메라 초기화</button>
+      <button type="button" class="chip-btn" id="btnCloseUp">🔍 확대 보기(수면 클로즈업)</button>
+      <button type="button" class="chip-btn" id="btnWater" aria-pressed="true">💧 물 분자 보기</button>
+    </div>
+    <div class="legend3d" aria-hidden="true">
+      <span><i class="dot dot-c"></i>C</span>
+      <span><i class="dot dot-o"></i>O</span>
+      <span><i class="dot dot-b"></i>기포</span>
+      <span><i class="dot dot-w"></i>H₂O</span>
+      <span class="quality" id="quality"></span>
+    </div>
+    <div class="drink-panel" id="drinkPanel" hidden>
+      <button type="button" class="close-x" id="drinkClose" aria-label="닫기">×</button>
+      <div class="drink-title">🥤 입 안에서 방출될 CO₂ 양</div>
+      <div class="drink-big"><span id="drinkReleased">0.00</span> <small>g/L</small></div>
+      <div class="drink-eq" id="drinkEq"></div>
+      <div class="drink-sip" id="drinkSip"></div>
+      <div class="gauge-label"><span>탄산감 게이지 (방출 속도)</span><span id="gaugeText"></span></div>
+      <div class="gauge" role="meter" aria-label="탄산감" aria-valuemin="0" aria-valuemax="100" id="gauge"><div class="gauge-fill" id="gaugeFill"></div></div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <section class="card status-card" aria-labelledby="statusTitle">
+      <div class="card-head">
+        <h2 id="statusTitle">현재 상태</h2>
+        <span class="badge" id="statusBadge">포화 평형</span>
+      </div>
+      <dl class="stats">
+        <div><dt>온도</dt><dd id="vT">–</dd></div>
+        <div><dt>병 속 CO₂ 압력</dt><dd id="vPb">–</dd></div>
+        <div><dt>주변 기압</dt><dd id="vPa">–</dd></div>
+        <div><dt>뚜껑</dt><dd id="vCap">–</dd></div>
+        <div class="em"><dt>현재 용존 CO₂</dt><dd id="vC">–</dd></div>
+        <div class="em"><dt>평형 용해도</dt><dd id="vCeq">–</dd></div>
+      </dl>
+      <p class="sim-time">시뮬레이션 시간 <b id="vTime">0.00 s</b> · 유효 CO₂ 압력 <b id="vPeff">–</b> · <span id="vSpeed">×1</span></p>
+      <div class="formula" aria-label="현재 계산식">
+        <code id="fK"></code>
+        <code id="fP"></code>
+        <code id="fCeq" class="strong"></code>
+        <code id="fRate"></code>
+      </div>
+    </section>
+
+    <section class="card graph-card" aria-labelledby="graphTitle">
+      <h2 id="graphTitle" class="sr-only">그래프</h2>
+      <div class="tabs" role="tablist" aria-label="그래프 종류">
+        <button type="button" role="tab" class="tab" id="tab-curve" aria-selected="true" aria-controls="graphPanel" data-tab="curve">용해도 곡선</button>
+        <button type="button" role="tab" class="tab" id="tab-time" aria-selected="false" aria-controls="graphPanel" data-tab="time">시간 그래프</button>
+        <button type="button" role="tab" class="tab" id="tab-gas" aria-selected="false" aria-controls="graphPanel" data-tab="gas">기체 비교</button>
+      </div>
+      <div id="graphPanel" role="tabpanel">
+        <canvas id="graph" class="graph" aria-label="그래프"></canvas>
+        <div class="gas-extra" id="gasExtra" hidden>
+          <label class="inline-toggle"><input type="checkbox" id="gasLog" checked> 로그 눈금으로 보기 (CO₂와 O₂·N₂의 차이가 커서 기본은 로그 눈금)</label>
+          <p class="connect-title">🔗 연결 질문 (눌러서 물어보기)</p>
+          <button type="button" class="question" data-ask="수온이 오르면 물고기에게 어떤 일이?">🐟 수온이 오르면 물고기에게 어떤 일이?</button>
+          <button type="button" class="question" data-ask="잠수부가 빨리 올라오면 혈액 속 N₂는?">🤿 잠수부가 빨리 올라오면 혈액 속 N₂는?</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card controls-card" aria-labelledby="ctrlTitle">
+      <h2 id="ctrlTitle">수동 조작</h2>
+      <div class="slider-row">
+        <label for="sT">온도</label>
+        <input type="range" id="sT" min="0" max="80" step="0.5" value="5">
+        <output id="oT" for="sT">5.00 ℃</output>
+      </div>
+      <div class="slider-row">
+        <label for="sPb">병 속 CO₂ 압력</label>
+        <input type="range" id="sPb" min="0" max="6000" step="10" value="3500">
+        <output id="oPb" for="sPb">3500.00 hPa</output>
+      </div>
+      <div class="slider-row">
+        <label for="sPa">주변 기압</label>
+        <input type="range" id="sPa" min="300" max="2000" step="1" value="1013.25">
+        <output id="oPa" for="sPa">1013.25 hPa</output>
+      </div>
+      <div class="button-row">
+        <button type="button" class="btn" id="btnCap">🔓 뚜껑 열기</button>
+        <button type="button" class="btn" id="btnShake">🫨 흔들기</button>
+        <button type="button" class="btn" id="btnDrink">🥤 마시기</button>
+      </div>
+      <p class="hint">뚜껑이 닫혀 있으면 병 속 CO₂ 압력이, 열려 있으면 주변 기압 × 0.0004(대기 중 CO₂ 부분압력)가 용해도를 정해요.</p>
+    </section>
+
+    <section class="card record-card" aria-labelledby="recTitle">
+      <div class="card-head">
+        <h2 id="recTitle">실험 기록</h2>
+        <div class="button-row tight">
+          <button type="button" class="btn small" id="btnRecord">📌 지금 기록</button>
+          <button type="button" class="btn small" id="btnCsv">💾 CSV 저장</button>
+          <button type="button" class="btn small" id="btnCopy">📋 표 복사</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="records">
+          <thead><tr id="recHead"></tr></thead>
+          <tbody id="recBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<footer class="dock" id="dock">
+  <div class="chat-log" id="chatLog" aria-live="polite" aria-label="명령 기록"></div>
+  <div class="chips" id="chips" aria-label="예시 명령"></div>
+  <form class="input-row" id="cmdForm" autocomplete="off">
+    <span class="mode-badge" id="modeBadge" title="현재 명령 해석 방식">🧩 내장 해석기</span>
+    <button type="button" class="icon-btn" id="btnMic" hidden aria-label="음성으로 입력">🎤</button>
+    <input type="text" id="cmdInput" enterkeyhint="send" placeholder="예) 온도 10도 올려줘, 뚜껑 닫고 압력 5000hPa로 해줘" aria-label="AI에게 보낼 명령">
+    <button type="submit" class="btn btn-accent send" id="btnSend"><span class="send-label">보내기</span><span class="spinner" aria-hidden="true"></span></button>
+  </form>
+</footer>
+
+<dialog id="settings" aria-labelledby="setTitle">
+  <form method="dialog" class="settings-form" id="settingsForm">
+    <h2 id="setTitle">⚙ AI 설정</h2>
+    <p class="hint">AI 모드를 켜면 대형 언어 모델(LLM)이 문장을 해석해요. 응답이 8초 안에 오지 않거나 형식이 틀리면 자동으로 내장 해석기가 처리해요.</p>
+    <label class="inline-toggle"><input type="checkbox" id="setEnabled"> AI 모드 사용</label>
+    <label for="setProvider">제공자</label>
+    <select id="setProvider">
+      <option value="anthropic">Anthropic Claude</option>
+      <option value="openai">OpenAI</option>
+      <option value="gemini">Google Gemini</option>
+      <option value="custom">OpenAI 호환 (사용자 지정 URL)</option>
+    </select>
+    <div id="rowBaseUrl" hidden>
+      <label for="setBaseUrl">API 주소 (예: http://localhost:11434/v1)</label>
+      <input type="url" id="setBaseUrl" placeholder="https://example.com/v1" spellcheck="false">
+    </div>
+    <label for="setModel">모델명</label>
+    <input type="text" id="setModel" spellcheck="false">
+    <label for="setKey">API 키</label>
+    <input type="password" id="setKey" autocomplete="off" spellcheck="false" placeholder="키는 이 탭의 메모리에만 보관돼요">
+    <p class="hint">🔒 API 키는 저장되지 않고 페이지를 닫거나 새로 고치면 사라져요. 학생 기기에 키를 입력할 때는 사용량 한도가 있는 키를 쓰세요. Anthropic은 키가 비어 있으면 키 없이 한 번 시도해요(claude.ai 아티팩트 미리보기용).</p>
+    <div class="button-row end">
+      <button type="button" class="btn" id="setClearKey">키 지우기</button>
+      <button type="button" class="btn" id="setCancel">취소</button>
+      <button type="submit" class="btn btn-accent" id="setSave">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- INLINE:THREE -->
+<!-- INLINE:CORE -->
+<!-- INLINE:APP -->
+</body>
+</html>
